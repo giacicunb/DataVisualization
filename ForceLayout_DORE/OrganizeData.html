@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>D3: Force layout</title>
+        <script src="https://d3js.org/d3.v3.js"></script>
+    <script type="module" src="tsne.js"></script>
+    <script type="text/javascript" src="papaparse.js"></script>
+
+		<style type="text/css">
+			#general_view1 {
+        top: 4%;
+        position: absolute;
+        overflow: auto;
+        left: 0%;
+        height: 89%;
+        width: 100%;
+      }
+
+		</style>
+	</head>
+	<body>
+        
+        <button onclick="mainFunction()">Try it</button>
+    <p id="step1"> rodando </p> 
+	
+        
+        
+        
+    <script>
+      function mainFunction(){
+        var asyncRequest = new XMLHttpRequest();
+        var documentDocumentSimilarity = new Array();//document document similarity
+        var documentDocumentSimilarityString = "";//document document similarity string
+        var documents = [];//list of documents 
+        var documentsString = "";//list of documents string
+        var documentStringTeste = "";
+        var labels = [];
+        var labelsstring = '';
+        var secoes = [];
+        var conteudo = [];
+
+        var similarityThreshold = 0.75;
+        var labelsName = ['Poder Executivo', 'Licitações', 'Secretaria de Assuntos Jurídicos', 'Secretaria de Cultura', 'Secretaria de Educação, Esporte e Lazer', 'Secretaria de Finanças', 'Secretaria de Direitos Humanos e Segurança Cidadã', 'Secretaria de Saneamento', 'Secretaria de Serviços Públicos', 'Secretaria de Saúde', 'Poder Legislativo - old', 'Notícias', 'Secretaria de Administração e Gestão de Pessoas', 'Secretaria de Assistência Social', 'Secretaria de Ciência, Tecnologia e Desenvolvimento Econômico', 'Secretaria de Planejamento Participativo, Obras e Desenvolvimento Urbano e Ambiental', 'Secretaria de Coordenação Política de Governo', 'Secretaria de Comunicação', 'Fundação de Cultura Cidade do Recife - FCCR', 'Secretaria de Habitação'];
+        document.getElementById("step1").innerHTML = "pegando a matrix de similaridade dos documentos...";
+
+        //get the list of documents
+        asyncRequest.open( 'POST', "./dore_2009_proc.csv", false );
+        asyncRequest.send(); // send the request
+        documentsString =  asyncRequest.responseText;
+        var tempdocuments = documentsString.split("\n"); // .split("\r\n")
+        for (var h = 0; h < tempdocuments.length; h++) {
+          if(tempdocuments[h].length > 0 ) {
+            documents[h] = tempdocuments[h].split(",");
+          }
+        }
+
+        documentStringTeste = asyncRequest.responseText;
+        var results = Papa.parse(documentStringTeste);
+
+        //get secoes
+        asyncRequest.open( 'POST', "./txt/conteudo1000", false );
+        asyncRequest.send(); // send the request
+        conteudo =  asyncRequest.responseText;
+        conteudo = conteudo.split("\n"); // .split("\r\n")
+        
+        //get secoes
+        asyncRequest.open( 'POST', "./txt/secao1000", false );
+        asyncRequest.send(); // send the request
+        secoes =  asyncRequest.responseText;
+        secoes = secoes.split("\n"); // .split("\r\n")
+
+        //get labels
+        asyncRequest.open( 'POST', "./txt/label1000", false );
+        asyncRequest.send(); // send the request
+        labelsstring =  asyncRequest.responseText;
+        labels = labelsstring.split("\n"); // .split("\r\n")
+
+        //get document-document similarity matrix
+        asyncRequest.open( 'POST', "./txt/documentDistance1000", false );
+        asyncRequest.send(); // send the request
+        documentDocumentSimilarityString = asyncRequest.responseText;
+        var temp = documentDocumentSimilarityString.split("\n"); // .split("\r\n")
+        for (var i = 0; i < temp.length; i++) {
+          if(temp[i].length > 0 ) {
+            documentDocumentSimilarity[i] = temp[i].split(",");
+          }
+        }
+
+        var scale_width = 600;
+        var scale_height = 600;
+        var tsneSilhouetteState = false;
+        var tsneResult = new Array();
+        document.getElementById("step1").innerHTML = "rodando o tsne";
+
+        //run t-sne
+        if(tsneResult.length < 1) {
+          tsneSilhouetteState = true;
+          var opt = {epsilon: 10}; // epsilon is learning rate (10 = default)
+          var tsne = new tsnejs.tSNE(opt); // create a tSNE instance
+          tsne.initDataDist(documentDocumentSimilarity);
+      
+          for(var k = 0; k < 300; k++) {
+            tsne.step(); // every time you call this, solution gets better
+          }
+      
+          tsneResult = tsne.getSolution(); // Y is an array of 2-D points that you can plot
+        }
+
+        var tsneLables = new Array();
+        var tempGeneralViewGraph = "{";
+
+        //add nodes
+        var documentNewIndex = [];
+        var index = 0;
+        tempGeneralViewGraph += " nodes :[";
+        for (var i = 0; i < documentDocumentSimilarity.length; i++) {
+            documentNewIndex[i] = index;
+            
+            var documentClustersName = secoes[i];
+            tempGeneralViewGraph += "{ x : " + (tsneResult[i][0] + scale_width) * 6
+                                  + ",  y : " + (tsneResult[i][1] + scale_height) * 6
+                                  + ",  fixed :false"
+                                  + ", na :\"" + secoes[i]                            
+                                  + "\", conteudo :\"" + conteudo[i]
+                                  + "\", label :\"" + labels[i]
+                                  +  "\"},";
+
+            tsneLables[index] = documentClustersName.split(",")[0];
+            index++;     
+        };
+
+        //remove the last comma
+        tempGeneralViewGraph = tempGeneralViewGraph.substring(0, tempGeneralViewGraph.length - 1);
+        tempGeneralViewGraph += "],";
+
+       //add links
+          var count = 0;
+          tempGeneralViewGraph += " links :[";
+          for (var i = 0; i < documentDocumentSimilarity.length; i++) {
+            for (var j = 0; j < documentDocumentSimilarity.length; j++) {
+              if(i != j) {// no self loop (cycle)
+                if(parseFloat(documentDocumentSimilarity[i][j]) <= similarityThreshold ) {
+                  tempGeneralViewGraph += "{ source :"+documentNewIndex[i]+", target :"
+                                       +documentNewIndex[j]+", v :"+documentDocumentSimilarity[i][j]+"},";
+                  count++;
+                }
+              }
+            } 
+          } 
+
+        //remove the last comma
+        tempGeneralViewGraph = tempGeneralViewGraph.substring(0, tempGeneralViewGraph.length - 1);
+        tempGeneralViewGraph += "]}";
+         
+        document.getElementById("step1").innerHTML = tempGeneralViewGraph;  
+        //load Force layout
+        load_Force(0.70); 
+
+        //varibales for contorling general view graph
+var svg,//for T-SNE    
+    link,// T-SNE 
+    node,// T-SNE
+    g,// T-SNE
+    g2,//for force layout 
+    svg2,//for force layout 
+    link2,//for force layout
+    node2,//for force layout 
+    r = 4;//r of circles
+var linkedByIndex = new Array();
+var linkedByIndex2 = new Array();
+var gravity = 0.3;
+var linkDistance = 20;
+var highlight_trans = 0.25;
+
+
+
+/*
+ * load force layout
+ * @parm threshold = threshold for cosine distance
+ */
+function load_Force(threshold) {
+  
+  linkedByIndex2 = new Array();
+
+  var margin = {top: 5, right: 5, bottom: 5, left: 5},
+      width = 600 - margin.left - margin.right,
+      height = 600 - margin.top - margin.bottom;
+
+  var nominal_base_node_size = 8;
+  var focus_node = null, highlight_node = null;
+  var highlight_color = "black";  
+  var outline = false;
+  var default_link_color = "#a6a6a6";
+  var nominal_stroke = 0.5;
+  var max_stroke = 4.5;
+  var max_base_node_size = 36;
+  var min_zoom = 0.1;
+  var max_zoom = 8;
+  var zoom = d3.behavior.zoom().scaleExtent([min_zoom,max_zoom]);  
+  var towhite = "stroke";
+  if (outline) {
+    tocolor = "stroke"
+    towhite = "fill"
+  }
+  var size = d3.scale.pow().exponent(1).domain([1,100]).range([8,24]);
+
+  svg2 = d3.select("#general_view2").append("svg")
+    .attr("class", "svg")
+    .attr("width", "100%")
+    .attr("height", "100%");
+
+  g2 = svg2.append("g");
+
+  force2 = d3.layout.force()
+    .size([width, height])
+    .gravity(gravity)
+    .distance(linkDistance)
+    .charge(-50)
+    .on("tick", tick);
+
+  var drag = force2.drag()
+    .on("dragstart", dragstart);
+
+  node2 = force2.nodes();
+  link2 = force2.links();
+
+  link2 = g2.append('g').selectAll(".link2"),
+  node2 = g2.append('g').selectAll(".node2"); 
+
+  // d3.json("data/json5.json", function(error, json) {
+  //  if (error) throw error;
+
+
+var generalViewGraph2 = { nodes :
+[{ x : 3600.0000000225673, y : 3599.999999804587, fixed :false, na :"Poder Executivo ", cl :"undefined", label :"0 "},
+{ x : 3600.000000038618, y : 3600.0000003130676, fixed :false, na :"Poder Executivo ", cl :"undefined", label :"0 "},
+{ x : 3600.000000092151, y : 3599.999999920191, fixed :false, na :"Poder Executivo ", cl :"undefined", label :"0 "},
+{ x : 3599.9999999784573, y : 3599.9999999557617, fixed :false, na :"Poder Executivo ", cl :"undefined", label :"0 "},
+{ x : 3600.000000145613, y : 3599.99999979334, fixed :false, na :"Poder Executivo ", cl :"undefined", label :"0 "},
+{ x : 3600.000000030306, y : 3599.9999999169713, fixed :false, na :"Poder Executivo ", cl :"undefined", label :"0 "},
+{ x : 3600.0000000338646, y : 3599.999999789518, fixed :false, na :"Licita��es ", cl :"undefined", label :"1 "},
+{ x : 3600.000000067987, y : 3600.0000000990426, fixed :false, na :"Licita��es ", cl :"undefined", label :"1 "},
+{ x : 3599.9999999813317, y : 3599.999999970275, fixed :false, na :"Licita��es ", cl :"undefined", label :"1 "},
+{ x : 3599.999999967497, y : 3599.9999999966794, fixed :false, na :"Secretaria de Assuntos Jur�dicos ", cl :"undefined", label :"2 "},
+{ x : 3599.9999999896936, y : 3600.0000000763253, fixed :false, na :"Secretaria de Assuntos Jur�dicos ", cl :"undefined", label :"2 "},
+{ x : 3599.999999963752, y : 3599.999999958242, fixed :false, na :"Secretaria de Assuntos Jur�dicos ", cl :"undefined", label :"2 "},
+{ x : 3600.000000043975, y : 3600.0000000592045, fixed :false, na :"Secretaria de Assuntos Jur�dicos ", cl :"undefined", label :"2 "},
+{ x : 3599.9999999506126, y : 3600.0000000574632, fixed :false, na :"Secretaria de Cultura ", cl :"undefined", label :"3 "},
+{ x : 3599.9999999821703, y : 3599.999999909812, fixed :false, na :"Secretaria de Cultura ", cl :"undefined", label :"3 "},
+{ x : 3599.9999999027104, y : 3599.999999963996, fixed :false, na :"Secretaria de Educa��o, Esporte e Lazer ", cl :"undefined", label :"4 "},
+{ x : 3599.9999999442366, y : 3599.999999810124, fixed :false, na :"Secretaria de Educa��o, Esporte e Lazer ", cl :"undefined", label :"4 "},
+{ x : 3599.9999999395895, y : 3600.0000000171067, fixed :false, na :"Secretaria de Educa��o, Esporte e Lazer ", cl :"undefined", label :"4 "},
+{ x : 3600.0000001954095, y : 3599.999999969402, fixed :false, na :"Secretaria de Educa��o, Esporte e Lazer ", cl :"undefined", label :"4 "},
+{ x : 3600.0000000431883, y : 3600.0000003053083, fixed :false, na :"Secretaria de Educa��o, Esporte e Lazer ", cl :"undefined", label :"4 "},
+{ x : 3599.999999787642, y : 3600.000000133408, fixed :false, na :"Secretaria de Finan�as ", cl :"undefined", label :"5 "},
+{ x : 3600.000000109093, y : 3600.0000000181, fixed :false, na :"Secretaria de Direitos Humanos e Seguran�a Cidad� ", cl :"undefined", label :"6 "},
+{ x : 3599.9999999986676, y : 3600.000000032719, fixed :false, na :"Secretaria de Direitos Humanos e Seguran�a Cidad� ", cl :"undefined", label :"6 "},
+{ x : 3599.9999998142566, y : 3600.0000002140423, fixed :false, na :"Secretaria de Direitos Humanos e Seguran�a Cidad� ", cl :"undefined", label :"6 "},
+{ x : 3599.99999997661, y : 3599.9999999153124, fixed :false, na :"Secretaria de Direitos Humanos e Seguran�a Cidad� ", cl :"undefined", label :"6 "}], 
+ links :[{ source :0, target :9, v :0.9824885083995399},{ source :0, target :10, v :0.9805071493965867},{ source :0, target :11, v :0.9840388923003505},{ source :1, target :14, v :0.9708109613264405},{ source :2, target :14, v :0.9965038899241474},{ source :2, target :23, v :0.9737782328801738},{ source :3, target :8, v :0.9818421178692748},{ source :3, target :14, v :0.9943287586449451},{ source :3, target :23, v :0.9722476863290096},{ source :4, target :8, v :0.9742142707015833},{ source :4, target :14, v :0.9857695252788297},{ source :5, target :14, v :0.9707424876062644},{ source :5, target :22, v :0.9856195620588095},{ source :5, target :23, v :0.975301583972487},{ source :5, target :24, v :0.9718661894656232 },{ source :7, target :18, v :0.9709253855720581},{ source :8, target :3, v :0.9818421178692748},{ source :8, target :4, v :0.9742142707015833},{ source :8, target :18, v :0.9822978161670147},{ source :9, target :0, v :0.9824885083995399},{ source :9, target :14, v :0.9879463652658961},{ source :9, target :19, v :0.9740865420730984},{ source :9, target :21, v :0.9745036127751474},{ source :9, target :23, v :0.9826447672969671},{ source :10, target :0, v :0.9805071493965867},{ source :10, target :14, v :0.98967982274738},{ source :10, target :19, v :0.9757376632552913},{ source :10, target :21, v :0.973455255461511},{ source :10, target :23, v :0.982449980036868},{ source :11, target :0, v :0.9840388923003505},{ source :11, target :14, v :0.9899872849846014},{ source :11, target :19, v :0.9741318985346382},{ source :11, target :21, v :0.9759659154574637},{ source :11, target :23, v :0.9831197285106861},{ source :13, target :15, v :0.990810845225119},{ source :13, target :16, v :0.9926749926143679},{ source :13, target :18, v :0.9840225788038546},{ source :13, target :22, v :0.9741225815809984},{ source :13, target :23, v :0.9853843726782784},{ source :13, target :24, v :0.9959835760670662 },{ source :14, target :1, v :0.9708109613264405},{ source :14, target :2, v :0.9965038899241474},{ source :14, target :3, v :0.9943287586449451},{ source :14, target :4, v :0.9857695252788297},{ source :14, target :5, v :0.9707424876062644},{ source :14, target :9, v :0.9879463652658961},{ source :14, target :10, v :0.98967982274738},{ source :14, target :11, v :0.9899872849846014},{ source :14, target :15, v :0.9905640900755234},{ source :14, target :16, v :1.0},{ source :14, target :17, v :0.9905360348673609},{ source :14, target :21, v :0.9874583712388647},{ source :14, target :23, v :0.9831721639823531},{ source :14, target :24, v :1.0 },{ source :15, target :13, v :0.990810845225119},{ source :15, target :14, v :0.9905640900755234},{ source :16, target :13, v :0.9926749926143679},{ source :16, target :14, v :1.0},{ source :17, target :14, v :0.9905360348673609},{ source :18, target :7, v :0.9709253855720581},{ source :18, target :8, v :0.9822978161670147},{ source :18, target :13, v :0.9840225788038546},{ source :19, target :9, v :0.9740865420730984},{ source :19, target :10, v :0.9757376632552913},{ source :19, target :11, v :0.9741318985346382},{ source :21, target :9, v :0.9745036127751474},{ source :21, target :10, v :0.973455255461511},{ source :21, target :11, v :0.9759659154574637},{ source :21, target :14, v :0.9874583712388647},{ source :22, target :5, v :0.9856195620588095},{ source :22, target :13, v :0.9741225815809984},{ source :23, target :2, v :0.9737782328801738},{ source :23, target :3, v :0.9722476863290096},{ source :23, target :5, v :0.975301583972487},{ source :23, target :9, v :0.9826447672969671},{ source :23, target :10, v :0.982449980036868},{ source :23, target :11, v :0.9831197285106861},{ source :23, target :13, v :0.9853843726782784},{ source :23, target :14, v :0.9831721639823531},{ source :24, target :5, v :0.9718661894656232},{ source :24, target :13, v :0.9959835760670662},{ source :24, target :14, v :1.0}]};
+
+
+
+    //filter links by threshold
+    var linkData = generalViewGraph2.links;
+
+    d3.selectAll('.links')
+    .selectAll('line')
+    .each(function (d) { 
+      if (d.v <= threshold) {
+        return n;}
+    })
+    
+    linkData.forEach(function(d) {linkedByIndex2[d.source + "," + d.target] = true;  });
+
+    force2.nodes(generalViewGraph2.nodes)
+        .links(generalViewGraph2.links)
+        .start();
+
+      link2 = link2.data(linkData)
+        .enter().append("line")
+        .attr("class", "link2");
+
+      node2 = node2.data(generalViewGraph2.nodes)
+        .enter().append("circle")
+        .attr("class", "node2")
+        .style("fill", function(d) { return d.co; })
+        .attr("r", r)        
+        .on("dblclick", dblclick)
+        .call(drag)
+        .attr("data-hasqtip", function(d) {
+          $(this).qtip({
+            content: {
+              text: '<strong>Document name:</strong><br><u class="hyperLink" onclick="showDocumentPDF($(this).text())">'+ d.na +
+                    '</u><br><br><strong>Label name:</strong><br>' + d.label              
+            },            
+            hide: {
+              fixed: true,
+              delay: 700
+            },
+            show: {
+              delay: 1500
+            },
+            style: {
+              classes: 'qtip-rounded qtip-shadow'
+            },
+            position: {
+              my: 'center right',
+              at: 'center left'
+            }
+          });
+     });
+
+    node2.on("mouseover", function(d) { saveLog("forceLayoutNodeMouseOver"); force2.stop(); set_highlight(d) })
+        .on("click", function(d) {   force2.stop();
+                                      d3.event.stopPropagation();
+                                       focus_node = d;
+                                       set_focus(d);
+                                       set_highlight(d); 
+                                       saveLog("forceLayoutNodeClick");} )
+        .on("mousedown", function(d) { force2.stop(); d3.event.stopPropagation(); } )
+        .on("mouseout", function(d) { force2.stop(); exit_highlight(); } )
+        .on("contextmenu", function (d, i) {
+          saveLog("forceLayoutNodeShowCloud");
+            force2.stop(); d3.event.preventDefault();
+           // react on right-clicking
+        });
+
+    svg2.on("click",  function() {
+        force2.stop();
+        if (focus_node!= null)
+        {
+          focus_node = null;
+          if (highlight_trans<1)
+          {  
+            node2.style("opacity", 1);            
+            link2.style("opacity", 1);
+
+            node.style("opacity", 1);            
+            link.style("opacity", 1);
+          }
+        }
+        else {
+          node2.style("opacity", 1);            
+          link2.style("opacity", 1);
+
+          node.style("opacity", 1);            
+          link.style("opacity", 1);
+        }  
+        if (highlight_node == null) exit_highlight();
+    })
+    .on("contextmenu", function (d, i) {
+            d3.event.preventDefault();
+           // react on right-clicking
+     });
+
+    // node.on("dblclick.zoom", function(d) { d3.event.stopPropagation();
+    //   var dcx = (window.innerWidth/2-d.x*zoom.scale());
+    //   var dcy = (window.innerHeight/2-d.y*zoom.scale());
+    //   zoom.translate([dcx,dcy]);
+    //   g.attr("transform", "translate("+ dcx + "," + dcy  + ")scale(" + zoom.scale() + ")"); 
+    // });
+
+  // });  
+
+  function tick() {
+    link2.attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+    node2.attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; });
+  }  
+
+  function dblclick(d) {
+    d3.select(this).classed("fixed", d.fixed = false);
+  }
+
+  function dragstart(d) {
+    d3.select(this).classed("fixed", d.fixed = true);
+  }
+
+  function isConnected(a, b) {
+    return linkedByIndex2[a.index + "," + b.index] || linkedByIndex2[b.index + "," + a.index] || a.index == b.index;
+  }
+
+  function isNumber(n) {
+    return !isNaN(parseFloat(n)) && isFinite(n);
+  } 
+
+  function set_highlight(d)
+  {
+    svg2.style("cursor","pointer");
+    svg.style("cursor","pointer");
+    if (focus_node!= null) d = focus_node;
+    highlight_node = d;
+
+    if (highlight_color !="#a6a6a6")
+    {
+      node2.style(towhite, function(o) {
+        if(o.na == $(doc_select).val()) {
+            return "red";
+        }
+        // else if(docsHighlight[o.na]) 
+        // {
+        //   return "blue";
+        // }
+        else if(isConnected(d, o)) {
+          return highlight_color;
+        }
+        else {          
+          return "#a6a6a6";
+        }
+      });
+      
+      link2.style("stroke", function(o) {
+          return o.source.index == d.index || o.target.index == d.index ? highlight_color : 
+                  ((isNumber(o.score) && o.score>=0)?color(o.score):default_link_color);
+      });
+
+      //set node stroke
+      node2.style("stroke-width", function(o) {
+        if((docsHighlight[o.na] && isConnected(d, o)) || o.na == $(doc_select).val()) {
+          return "2px";
+        }
+        else {          
+          return "0.5px";
+        }   
+      })
+
+      node.style(towhite, function(o) {
+        if(o.na == $(doc_select).val()) {
+            return "red";
+        }
+        // else if(docsHighlight[o.na]) 
+        // {
+        //   return "blue";
+        // }
+        else if(isConnected(d, o)) {
+          return highlight_color;
+        }
+        else {          
+          return "#a6a6a6";
+        }
+      });
+      
+      link.style("stroke", function(o) {
+          return o.source.index == d.index || o.target.index == d.index ? highlight_color : 
+                  ((isNumber(o.score) && o.score>=0)?color(o.score):default_link_color);
+      });
+
+      //set node stroke
+      node.style("stroke-width", function(o) {
+        if((docsHighlight[o.na] && isConnected(d, o)) || o.na == $(doc_select).val()) {
+          return "2px";
+        }
+        else {          
+          return "0.5px";
+        }   
+      })
+    }
+  }
+
+  function exit_highlight()
+  {
+    highlight_node = null;
+    if (focus_node==null)
+    {
+      svg2.style("cursor","move");
+      if (highlight_color!="#a6a6a6")
+      {
+        node2.style(towhite, function(o) {
+          if(o.na == $(doc_select).val()) {
+            return "red";
+          }
+          // else if(docsHighlight[o.na]) 
+          // {
+          //   return "blue";
+          // }
+          else {          
+            return "#a6a6a6";
+          }
+        })
+        link2.style("stroke", function(o) {return (isNumber(o.score) && o.score>=0)?color(o.score):default_link_color});
+
+          //set node stroke
+          node2.style("stroke-width", function(o) {
+          if(o.na == $(doc_select).val()) {
+            return "2px";
+          }
+          else {          
+            return "0.5px";
+          }   
+        })
+      }
+    }
+  }
+
+  zoom.on("zoom", function() {
+
+    var stroke = nominal_stroke;
+
+    if (nominal_stroke*zoom.scale()>max_stroke) {
+      stroke = max_stroke/zoom.scale();
+    }
+
+    link2.style("stroke-width",stroke);
+    // node.style("stroke-width",stroke);
+
+    node2.style("stroke-width", function(o) {
+        if(o.na == $(doc_select).val() ) {
+          return stroke * 3;
+        }
+        else {          
+          return stroke;
+        }
+    });
+     
+    var base_radius = nominal_base_node_size;
+  
+    g2.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+  });
+
+  svg2.call(zoom); 
+}//************************* End of force layout load  */
+    
+      }
+
+      
+    </script>
+	
+	</body>
+</html>
