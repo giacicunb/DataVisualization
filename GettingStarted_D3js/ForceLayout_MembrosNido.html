@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Force layout - Membros Nido</title>
+		<script type="text/javascript" src="d3.js"></script>
+		<style type="text/css">
+			/* No style rules here yet */
+		</style>
+	</head>
+	<body>
+		<script type="text/javascript">
+
+			//Width and height
+			var w = 1000;
+			var h = 1000;
+
+			//Original data [Time: 1 = professor, 2 = anotação, 3 = extração, 4 = gestão, 5 = pos-graduação, 6 = não sei se saiu]
+			var dataset = {
+				nodes: [
+					{ name: "Prof. Teofilo", time: 1 }, //0
+					{ name: "Prof. Vinicius", time: 1 }, //1
+					{ name: "Lívia", time: 2 }, //2
+					{ name: "Matheus",  time: 2}, //3
+					{ name: "Tatiana", time: 2 }, //4
+					{ name: "Prof. Thiago", time: 1 }, //5
+					{ name: "Prof. Nilton", time: 1 }, //6
+					{ name: "Prof. Fabricio", time: 1 }, //7
+					{ name: "Carolina", time: 4 }, //8
+					{ name: "Isaque", time: 4 }, //9
+                    { name: "Leonardo", time: 3 }, //10
+                    { name: "Khalil", time: 3 }, //11
+                    { name: "Renato", time: 3 }, //12
+                    { name: "Felipe Campos", time: 3 }, //13
+                    { name: "João Lucas", time: 3 }, //14
+                    { name: "Lindeberg", time: 5 }, //15
+                    { name: "Patricia", time: 5 }, //16
+                    { name: "Pedro", time: 5 }, //17
+                    { name: "Frederico", time: 5 }, //18
+                    { name: "José Reinaldo", time: 5 }, //19
+                    { name: "Davi Alves", time: 6 }, //19
+                    { name: "Gabriel Manso", time: 6 }, //19
+				],
+				edges: [
+                    //relação entre os professores
+					{ source: 0, target: 1 },
+                    { source: 0, target: 5 },
+					{ source: 0, target: 6 },
+					{ source: 0, target: 7 },
+					{ source: 5, target: 6 },
+					{ source: 5, target: 7 },
+					{ source: 6, target: 7 },
+                    //equipe de anotação
+					{ source: 1, target: 2 },
+					{ source: 1, target: 3 },
+					{ source: 1, target: 4 },
+					{ source: 2, target: 3 },
+					{ source: 2, target: 4 },
+                    { source: 3, target: 4 },
+                    //gestão
+                    { source: 0, target: 8 },
+                    { source: 8, target: 9 },
+                    //equipe de extração
+                    { source: 5, target: 10 },
+                    { source: 5, target: 11 },
+                    { source: 5, target: 12 },
+                    { source: 6, target: 13 },
+                    { source: 6, target: 14 },
+                    { source: 7, target: 13 },
+                    { source: 7, target: 14 },
+                    { source: 10, target: 11 },
+                    { source: 10, target: 12 },
+                    { source: 10, target: 13 },
+                    { source: 10, target: 14 },
+                    { source: 11, target: 12 },
+                    { source: 11, target: 13 },
+                    { source: 11, target: 14 },
+                    { source: 12, target: 14 },
+                    { source: 12, target: 13 },
+                    { source: 13, target: 14 },
+                    //equipe de pos graduação
+                    { source: 15, target: 16 },
+                    { source: 15, target: 17 },
+                    { source: 15, target: 18 },
+                    { source: 15, target: 19 },
+                    { source: 16, target: 17 },
+                    { source: 16, target: 18 },
+                    { source: 16, target: 19 },
+                    { source: 17, target: 18 },
+                    { source: 17, target: 19 },
+                    { source: 18, target: 19 },
+                    { source: 0, target: 16 }
+
+					
+				]
+			};
+
+			//Initialize a simple force layout, using the nodes and edges in dataset
+			var force = d3.forceSimulation(dataset.nodes)
+						  .force("charge", d3.forceManyBody())
+						  .force("link", d3.forceLink(dataset.edges))
+						  .force("center", d3.forceCenter().x(w/2).y(h/2));
+                          //.force("x", d3.forceX())
+                          //.force("y", d3.forceY());
+
+			var colors = d3.scaleOrdinal(d3.schemeCategory10);
+
+			//Create SVG element
+			var svg = d3.select("body")
+						.append("svg")
+						.attr("width", w)
+						.attr("height", h);
+                        //.attr("viewBox", [-width / 2, -height / 2, width, height]);
+			
+			//Create edges as lines
+			var edges = svg.selectAll("line")
+				.data(dataset.edges)
+				.enter()
+				.append("line")
+				.style("stroke", "#ccc")
+				.style("stroke-width", 1);
+			
+			//Create nodes as circles
+			var nodes = svg.selectAll("circle")
+				.data(dataset.nodes)
+				.enter()
+				.append("circle")
+				.attr("r", 10)
+				.style("fill", function(d, i) {
+					return colors(d.time);
+				});
+
+			//Add a simple tooltip
+			nodes.append("title")
+				 .text(function(d) {
+					return d.name;
+				 });
+			
+			//Every time the simulation "ticks", this will be called
+			force.on("tick", function() {
+
+				edges.attr("x1", function(d) { return d.source.x; })
+					 .attr("y1", function(d) { return d.source.y; })
+					 .attr("x2", function(d) { return d.target.x; })
+					 .attr("y2", function(d) { return d.target.y; });
+			
+				nodes.attr("cx", function(d) { return d.x; })
+					 .attr("cy", function(d) { return d.y; });
+	
+			});
+
+			/*
+			
+				
+				
+				*/
+
+		</script>
+	</body>
+</html>
+
+
